@@ -39,9 +39,14 @@ fn encode(mut img: DynamicImage, mut secret_message: String) -> DynamicImage {
     for i in secret_message_bytes {
         let message_bits = i.view_bits::<Msb0>();
         for message_bit in message_bits {
+            if *message_bit {
+                print!("1")
+            } else {
+                print!("0")
+            }
             let mut pixel = img.get_pixel(cursor.x, cursor.y);
 
-            let pixel_r_bits = pixel[0].view_bits_mut::<Lsb0>();
+            let pixel_r_bits = pixel.0[0].view_bits_mut::<Lsb0>();
 
             pixel_r_bits.set(0, message_bit.as_bool());
 
@@ -64,21 +69,30 @@ fn encode(mut img: DynamicImage, mut secret_message: String) -> DynamicImage {
 
     img
 }
-fn decode(img: DynamicImage) {
+fn decode(img: DynamicImage) -> String {
     let dimension = img.dimensions();
     let mut cursor = Cursor { x: 0, y: 0 };
     let max_cursor = Cursor {
-        x: dimension.0,
-        y: dimension.1,
+        x: dimension.0 - 1,
+        y: dimension.1 - 1,
     };
     let mut secret_message = String::from("");
+
+    let mut total_bit: String = String::from("");
 
     while !secret_message.contains("END_OF_SECRET") {
         let mut bits: Vec<bool> = Vec::new();
         for _ in 0..7 {
             let pixel = img.get_pixel(cursor.x, cursor.y);
-            let pixel_r_bits = pixel.0[2].view_bits::<Lsb0>();
-            bits.push(*pixel_r_bits.get(0).unwrap());
+            let pixel_r_bits = pixel.0[0].view_bits::<Lsb0>();
+            let bit = *pixel_r_bits.get(0).unwrap();
+            bits.push(bit);
+
+            if bit {
+                total_bit.push('1');
+            } else {
+                total_bit.push('0');
+            }
 
             cursor = match change_cursor(cursor, max_cursor) {
                 Ok(v) => v,
@@ -95,22 +109,28 @@ fn decode(img: DynamicImage) {
 
         secret_message.push_str(match str::from_utf8(u8_vec.as_slice()) {
             Ok(v) => v,
-            Err(_) => "END_OF_SECRET",
+            Err(_) => "END_OF_SECRET_DECODE_FAIL",
         });
-
-        println!("{}", secret_message);
-        thread::sleep(Duration::from_millis(10));
     }
+
+    secret_message
 }
 
 fn main() {
-    let img = image::open("./sample.jpeg").unwrap();
-
+    println!("START");
+    let img = image::open("./sample.png").unwrap();
+    println!("LOAD");
     let encoded_image = encode(img, String::from("hi nice to meet you"));
-    encoded_image.save("./result.jpg").expect("Failed");
+    println!("ENCODED");
+    encoded_image.save("./result.png").unwrap();
+    println!("SAVED");
 
-    let encoded_img = image::open("./result.jpg").unwrap();
+    let encoded_img = image::open("./result.png").unwrap();
+    println!("LOADED RESULT");
     let secret_message = decode(encoded_img);
+    println!("{}", secret_message);
+
+    println!("DONE");
 
     // let mut pixel = img.get_pixel(0, 0);
     // println!("pixel at 0, 0 : {:?}", pixel);
